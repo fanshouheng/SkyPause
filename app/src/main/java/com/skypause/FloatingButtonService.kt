@@ -23,6 +23,10 @@ class FloatingButtonService : Service() {
     private lateinit var speedControl: View
     private var isSpeedControlVisible = false
     private var currentSpeed = 1.0f
+    private var initialX: Int = 0
+    private var initialY: Int = 0
+    private var initialTouchX: Float = 0f
+    private var initialTouchY: Float = 0f
 
     override fun onBind(intent: Intent): IBinder? = null
 
