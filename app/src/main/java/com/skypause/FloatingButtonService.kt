@@ -21,6 +21,8 @@ class FloatingButtonService : Service() {
     private var initialY: Int = 0
     private var initialTouchX: Float = 0f
     private var initialTouchY: Float = 0f
+    private var lastClickTime: Long = 0
+    private val DOUBLE_CLICK_TIME_DELTA: Long = 300 // 双击间隔时间（毫秒）
 
     override fun onBind(intent: Intent): IBinder? = null
 
@@ -70,7 +72,12 @@ class FloatingButtonService : Service() {
 
         // 设置按钮点击事件
         floatingButton.findViewById<ImageButton>(R.id.floatingBtn).setOnClickListener {
-            pauseGame()
+            try {
+                // 发送媒体暂停键事件
+                Runtime.getRuntime().exec("input keyevent KEYCODE_MEDIA_PLAY_PAUSE")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
         // 添加悬浮按钮到窗口
@@ -78,11 +85,14 @@ class FloatingButtonService : Service() {
     }
 
     private fun pauseGame() {
-        // 使用 Intent.ACTION_MAIN 来模拟按下 HOME 键的效果
-        val startMain = Intent(Intent.ACTION_MAIN)
-        startMain.addCategory(Intent.CATEGORY_HOME)
-        startMain.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(startMain)
+        // 使用 Accessibility Service 来模拟按下最近任务键
+        // 这样可以让游戏暂停但不会返回桌面
+        try {
+            val cmd = "input keyevent KEYCODE_APP_SWITCH"
+            Runtime.getRuntime().exec(cmd)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onDestroy() {
