@@ -10,16 +10,10 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.app.AlertDialog
 import android.view.WindowManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.os.Build
-import androidx.core.app.NotificationCompat
 
 class PauseAccessibilityService : AccessibilityService() {
     private var isGamePaused = false
     private var gamePackageName = "com.tgc.sky.android"
-    private var mediaProjectionManager: MediaProjectionManager? = null
-    private val REQUEST_MEDIA_PROJECTION = 1
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
@@ -39,8 +33,6 @@ class PauseAccessibilityService : AccessibilityService() {
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         info.flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         serviceInfo = info
-        
-        mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -87,49 +79,5 @@ class PauseAccessibilityService : AccessibilityService() {
         val intent = Intent(this, ScreenCaptureActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(intent)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
-            // 保存录屏权限
-            RecordingService.setMediaProjectionData(resultCode, data)
-            
-            // 开始录制
-            val intent = Intent(this, RecordingService::class.java)
-            intent.action = "START_RECORDING"
-            startService(intent)
-            
-            // 3秒后停止录制
-            Handler(Looper.getMainLooper()).postDelayed({
-                val stopIntent = Intent(this, RecordingService::class.java)
-                stopIntent.action = "STOP_RECORDING"
-                startService(stopIntent)
-                
-                showNotification("录制完成", "视频已保存，可以在相册中查看并以慢动作播放")
-            }, 3000)
-        }
-    }
-
-    private fun showNotification(title: String, message: String) {
-        // 实现通知功能
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "recording_channel"
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Recording Service",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .build()
-
-        notificationManager.notify(1, notification)
     }
 } 
