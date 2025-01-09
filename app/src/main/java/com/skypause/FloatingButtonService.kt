@@ -20,9 +20,6 @@ import android.widget.TextView
 class FloatingButtonService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var floatingButton: View
-    private lateinit var speedControl: View
-    private var isSpeedControlVisible = false
-    private var currentSpeed = 1.0f
     private var initialX: Int = 0
     private var initialY: Int = 0
     private var initialTouchX: Float = 0f
@@ -37,51 +34,20 @@ class FloatingButtonService : Service() {
         
         // 创建悬浮按钮
         floatingButton = LayoutInflater.from(this).inflate(R.layout.floating_button, null)
-        
-        // 创建速度控制视图
-        speedControl = LayoutInflater.from(this).inflate(R.layout.speed_control, null)
-        
-        // 设置速度控制滑块监听
-        speedControl.findViewById<SeekBar>(R.id.speedSeekBar).setOnSeekBarChangeListener(
-            object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                    // 将 0-100 映射到 0.1-2.0
-                    currentSpeed = 0.1f + (progress / 100f) * 1.9f
-                    speedControl.findViewById<TextView>(R.id.speedText).text = 
-                        String.format("%.1fx", currentSpeed)
-                    
-                    // 发送速度更改广播
-                    sendBroadcast(Intent("SPEED_CHANGED").apply {
-                        putExtra("speed", currentSpeed)
-                    })
-                }
-                
-                override fun onStartTrackingTouch(seekBar: SeekBar) {}
-                override fun onStopTrackingTouch(seekBar: SeekBar) {}
-            }
-        )
 
         // 设置按钮点击事件
         floatingButton.findViewById<ImageButton>(R.id.floatingBtn).setOnClickListener {
-            if (!isSpeedControlVisible) {
-                // 显示速度控制
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                    else
-                        WindowManager.LayoutParams.TYPE_PHONE,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                    PixelFormat.TRANSLUCENT
-                )
-                params.gravity = Gravity.CENTER
-                windowManager.addView(speedControl, params)
-                isSpeedControlVisible = true
+            // 检查辅助功能服务是否已启用
+            if (!isAccessibilityServiceEnabled()) {
+                // 如果未启用，打开辅助功能设置
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                startActivity(intent)
             } else {
-                // 隐藏速度控制
-                windowManager.removeView(speedControl)
-                isSpeedControlVisible = false
+                // 如果已启用，发送操作指令
+                val intent = Intent(this, PauseAccessibilityService::class.java)
+                intent.action = "PERFORM_GLOBAL_ACTION"
+                startService(intent)
             }
         }
 
@@ -101,7 +67,7 @@ class FloatingButtonService : Service() {
         params.x = 0
         params.y = 100
 
-        // 设置按钮点击和拖动事件
+        // 设置按钮拖动事件
         floatingButton.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -124,22 +90,8 @@ class FloatingButtonService : Service() {
         windowManager.addView(floatingButton, params)
     }
 
-    private fun pauseGame() {
-        // 使用 Accessibility Service 来模拟按下最近任务键
-        // 这样可以让游戏暂停但不会返回桌面
-        try {
-            val cmd = "input keyevent KEYCODE_APP_SWITCH"
-            Runtime.getRuntime().exec(cmd)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        if (isSpeedControlVisible) {
-            windowManager.removeView(speedControl)
-        }
         windowManager.removeView(floatingButton)
     }
 
