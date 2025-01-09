@@ -13,6 +13,7 @@ import android.widget.ImageButton
 import android.os.Build
 import android.app.ActivityManager
 import android.content.Context
+import android.provider.Settings
 
 class FloatingButtonService : Service() {
     private lateinit var windowManager: WindowManager
@@ -72,11 +73,17 @@ class FloatingButtonService : Service() {
 
         // 设置按钮点击事件
         floatingButton.findViewById<ImageButton>(R.id.floatingBtn).setOnClickListener {
-            try {
-                // 发送媒体暂停键事件
-                Runtime.getRuntime().exec("input keyevent KEYCODE_MEDIA_PLAY_PAUSE")
-            } catch (e: Exception) {
-                e.printStackTrace()
+            // 检查辅助功能服务是否已启用
+            if (!isAccessibilityServiceEnabled()) {
+                // 如果未启用，打开辅助功能设置
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                startActivity(intent)
+            } else {
+                // 如果已启用，执行暂停操作
+                val intent = Intent(this, PauseAccessibilityService::class.java)
+                intent.action = "PERFORM_GLOBAL_ACTION"
+                startService(intent)
             }
         }
 
@@ -98,5 +105,27 @@ class FloatingButtonService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         windowManager.removeView(floatingButton)
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val accessibilityEnabled = try {
+            Settings.Secure.getInt(
+                contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED
+            )
+        } catch (e: Settings.SettingNotFoundException) {
+            0
+        }
+
+        if (accessibilityEnabled == 1) {
+            val services = Settings.Secure.getString(
+                contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+            services?.let {
+                return it.contains("${packageName}/${PauseAccessibilityService::class.java.name}")
+            }
+        }
+        return false
     }
 } 

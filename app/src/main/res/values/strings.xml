@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SkyPause</string>
+    <string name="accessibility_service_description">用于暂停游戏的辅助功能服务</string>
 </resources>
