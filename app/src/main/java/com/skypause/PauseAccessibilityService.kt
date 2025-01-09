@@ -3,6 +3,8 @@ package com.skypause
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 
 class PauseAccessibilityService : AccessibilityService() {
@@ -20,7 +22,15 @@ class PauseAccessibilityService : AccessibilityService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "PERFORM_GLOBAL_ACTION") {
-            performGlobalAction(GLOBAL_ACTION_RECENTS)
+            try {
+                performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+                
+                Handler(Looper.getMainLooper()).postDelayed({
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                }, 100)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         return super.onStartCommand(intent, flags, startId)
     }
