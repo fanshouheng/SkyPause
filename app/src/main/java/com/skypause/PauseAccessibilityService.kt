@@ -19,6 +19,7 @@ class PauseAccessibilityService : AccessibilityService() {
     private var isGamePaused = false
     private var gamePackageName = "com.tgc.sky.android"
     private var mediaProjectionManager: MediaProjectionManager? = null
+    private val REQUEST_MEDIA_PROJECTION = 1
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
@@ -83,23 +84,30 @@ class PauseAccessibilityService : AccessibilityService() {
     }
 
     private fun startSlowMotionRecording() {
-        // 1. 返回游戏
-        performGlobalAction(GLOBAL_ACTION_BACK)
-        
-        // 2. 开始录制（高帧率）
-        val intent = Intent(this, RecordingService::class.java)
-        intent.action = "START_RECORDING"
-        startService(intent)
-        
-        // 3. 3秒后自动停止录制
-        Handler(Looper.getMainLooper()).postDelayed({
-            val stopIntent = Intent(this, RecordingService::class.java)
-            stopIntent.action = "STOP_RECORDING"
-            startService(stopIntent)
+        val intent = Intent(this, ScreenCaptureActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == RESULT_OK && data != null) {
+            // 保存录屏权限
+            RecordingService.setMediaProjectionData(resultCode, data)
             
-            // 4. 显示录制完成的通知
-            showNotification("录制完成", "视频已保存，可以在相册中查看并以慢动作播放")
-        }, 3000) // 录制3秒
+            // 开始录制
+            val intent = Intent(this, RecordingService::class.java)
+            intent.action = "START_RECORDING"
+            startService(intent)
+            
+            // 3秒后停止录制
+            Handler(Looper.getMainLooper()).postDelayed({
+                val stopIntent = Intent(this, RecordingService::class.java)
+                stopIntent.action = "STOP_RECORDING"
+                startService(stopIntent)
+                
+                showNotification("录制完成", "视频已保存，可以在相册中查看并以慢动作播放")
+            }, 3000)
+        }
     }
 
     private fun showNotification(title: String, message: String) {

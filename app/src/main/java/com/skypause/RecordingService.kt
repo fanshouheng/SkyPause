@@ -1,13 +1,13 @@
 package com.skypause
 
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.MediaRecorder
-import android.media.MediaMetadataRetriever
-import android.media.MediaCodec
-import android.media.MediaMuxer
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.os.IBinder
 import android.os.Environment
 import java.io.File
@@ -15,14 +15,31 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class RecordingService : Service() {
+    companion object {
+        private const val NOTIFICATION_ID = 1
+        private var resultCode: Int = 0
+        private var resultData: Intent? = null
+
+        fun setMediaProjectionData(code: Int, data: Intent) {
+            resultCode = code
+            resultData = data
+        }
+    }
+
     private var mediaRecorder: MediaRecorder? = null
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var outputFile: File? = null
     
+    private fun initMediaProjection() {
+        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjection = projectionManager.getMediaProjection(resultCode, resultData!!)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "START_RECORDING" -> {
+                initMediaProjection()
                 startRecording()
             }
             "STOP_RECORDING" -> {
