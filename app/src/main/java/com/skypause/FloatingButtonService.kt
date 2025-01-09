@@ -14,16 +14,15 @@ import android.os.Build
 import android.app.ActivityManager
 import android.content.Context
 import android.provider.Settings
+import android.widget.SeekBar
+import android.widget.TextView
 
 class FloatingButtonService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var floatingButton: View
-    private var initialX: Int = 0
-    private var initialY: Int = 0
-    private var initialTouchX: Float = 0f
-    private var initialTouchY: Float = 0f
-    private var lastClickTime: Long = 0
-    private val DOUBLE_CLICK_TIME_DELTA: Long = 300 // 双击间隔时间（毫秒）
+    private lateinit var speedControl: View
+    private var isSpeedControlVisible = false
+    private var currentSpeed = 1.0f
 
     override fun onBind(intent: Intent): IBinder? = null
 
@@ -34,8 +33,55 @@ class FloatingButtonService : Service() {
         
         // 创建悬浮按钮
         floatingButton = LayoutInflater.from(this).inflate(R.layout.floating_button, null)
+        
+        // 创建速度控制视图
+        speedControl = LayoutInflater.from(this).inflate(R.layout.speed_control, null)
+        
+        // 设置速度控制滑块监听
+        speedControl.findViewById<SeekBar>(R.id.speedSeekBar).setOnSeekBarChangeListener(
+            object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                    // 将 0-100 映射到 0.1-2.0
+                    currentSpeed = 0.1f + (progress / 100f) * 1.9f
+                    speedControl.findViewById<TextView>(R.id.speedText).text = 
+                        String.format("%.1fx", currentSpeed)
+                    
+                    // 发送速度更改广播
+                    sendBroadcast(Intent("SPEED_CHANGED").apply {
+                        putExtra("speed", currentSpeed)
+                    })
+                }
+                
+                override fun onStartTrackingTouch(seekBar: SeekBar) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar) {}
+            }
+        )
 
-        // 设置悬浮窗参数
+        // 设置按钮点击事件
+        floatingButton.findViewById<ImageButton>(R.id.floatingBtn).setOnClickListener {
+            if (!isSpeedControlVisible) {
+                // 显示速度控制
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    else
+                        WindowManager.LayoutParams.TYPE_PHONE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    PixelFormat.TRANSLUCENT
+                )
+                params.gravity = Gravity.CENTER
+                windowManager.addView(speedControl, params)
+                isSpeedControlVisible = true
+            } else {
+                // 隐藏速度控制
+                windowManager.removeView(speedControl)
+                isSpeedControlVisible = false
+            }
+        }
+
+        // 添加悬浮按钮到窗口
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -71,23 +117,6 @@ class FloatingButtonService : Service() {
             }
         }
 
-        // 设置按钮点击事件
-        floatingButton.findViewById<ImageButton>(R.id.floatingBtn).setOnClickListener {
-            // 检查辅助功能服务是否已启用
-            if (!isAccessibilityServiceEnabled()) {
-                // 如果未启用，打开辅助功能设置
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                startActivity(intent)
-            } else {
-                // 如果已启用，执行暂停操作
-                val intent = Intent(this, PauseAccessibilityService::class.java)
-                intent.action = "PERFORM_GLOBAL_ACTION"
-                startService(intent)
-            }
-        }
-
-        // 添加悬浮按钮到窗口
         windowManager.addView(floatingButton, params)
     }
 
@@ -104,6 +133,9 @@ class FloatingButtonService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (isSpeedControlVisible) {
+            windowManager.removeView(speedControl)
+        }
         windowManager.removeView(floatingButton)
     }
 
