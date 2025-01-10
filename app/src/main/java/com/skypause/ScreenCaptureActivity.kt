@@ -1,14 +1,13 @@
 package com.skypause
 
 import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Notification
 import androidx.core.app.NotificationCompat
 
 class ScreenCaptureActivity : Activity() {
