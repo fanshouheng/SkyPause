@@ -8,11 +8,15 @@ import android.hardware.display.VirtualDisplay
 import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.IBinder
 import android.os.Environment
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.core.app.NotificationChannel
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.NotificationCompat
 
 class RecordingService : Service() {
     companion object {
@@ -107,6 +111,28 @@ class RecordingService : Service() {
         val intent = Intent("VIDEO_PROCESSED")
         intent.putExtra("output_path", outputFile.absolutePath)
         sendBroadcast(intent)
+    }
+
+    private fun showNotification(title: String, message: String) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "recording_channel"
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Recording Service",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .build()
+
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     override fun onBind(intent: Intent): IBinder? = null
