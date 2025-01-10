@@ -22,6 +22,8 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.SeekBar
 import android.widget.TextView
+import android.view.Gravity
+import android.graphics.PixelFormat
 
 class RecordingService : Service() {
     companion object {
@@ -41,8 +43,6 @@ class RecordingService : Service() {
     private var outputFile: File? = null
     private var speedControlView: View? = null
     private var currentSpeed = 1.0f
-    private var lastPresentationTimeUs: Long = 0
-    private var frameCallback: MediaProjection.Callback? = null
 
     override fun onBind(intent: Intent): IBinder? = null
 
@@ -115,24 +115,10 @@ class RecordingService : Service() {
 
     private fun adjustRecordingSpeed(speed: Float) {
         currentSpeed = speed
-        // 更新时间戳调整器
-        frameCallback?.let { mediaProjection?.unregisterCallback(it) }
-        frameCallback = object : MediaProjection.Callback() {
-            override fun onFrameAvailable(timeUs: Long) {
-                if (lastPresentationTimeUs == 0L) {
-                    lastPresentationTimeUs = timeUs
-                }
-                
-                // 根据速度调整时间戳
-                val adjustedTimeUs = lastPresentationTimeUs + 
-                    ((timeUs - lastPresentationTimeUs) * currentSpeed).toLong()
-                lastPresentationTimeUs = adjustedTimeUs
-                
-                // 使用调整后的时间戳
-                mediaRecorder?.setInputSurface(adjustedTimeUs)
-            }
+        val newFrameRate = (60 * speed).toInt().coerceIn(1, 60)
+        mediaRecorder?.apply {
+            setVideoFrameRate(newFrameRate)
         }
-        mediaProjection?.registerCallback(frameCallback!!, null)
     }
 
     private fun startRecording() {
@@ -165,7 +151,6 @@ class RecordingService : Service() {
             }
 
             // 初始化时间戳调整器
-            lastPresentationTimeUs = 0
             adjustRecordingSpeed(currentSpeed)
 
             virtualDisplay = mediaProjection?.createVirtualDisplay(
@@ -186,10 +171,6 @@ class RecordingService : Service() {
 
     private fun stopRecording() {
         try {
-            frameCallback?.let { mediaProjection?.unregisterCallback(it) }
-            frameCallback = null
-            lastPresentationTimeUs = 0
-            
             // 移除调速控制
             speedControlView?.let {
                 val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -203,16 +184,6 @@ class RecordingService : Service() {
             }
             virtualDisplay?.release()
             mediaProjection?.stop()
-
-            // 处理视频速度
-            outputFile?.let { file ->
-                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                val outputFilename = "SKY_SLOW_${timestamp}_${String.format("%.2fx", currentSpeed)}.mp4"
-                val processedFile = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), outputFilename)
-                
-                // TODO: 使用 MediaCodec 处理视频速度
-                // 这部分需要单独实现
-            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
