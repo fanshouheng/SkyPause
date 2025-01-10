@@ -17,12 +17,7 @@ class PauseAccessibilityService : AccessibilityService() {
     private var isShowingDialog = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val currentPackage = event.packageName?.toString()
-            if (currentPackage != gamePackageName && isGamePaused && !isShowingDialog) {
-                performGlobalAction(GLOBAL_ACTION_RECENTS)
-            }
-        }
+        // 移除切换逻辑
     }
     
     override fun onInterrupt() {}
@@ -38,48 +33,34 @@ class PauseAccessibilityService : AccessibilityService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "PERFORM_GLOBAL_ACTION") {
             try {
-                isGamePaused = !isGamePaused
-                if (isGamePaused) {
-                    performGlobalAction(GLOBAL_ACTION_RECENTS)
-                    
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        isShowingDialog = true
-                        val options = arrayOf("截图", "录制慢动作", "取消")
-                        val dialog = AlertDialog.Builder(this)
-                            .setTitle("选择操作")
-                            .setItems(options) { _, which ->
-                                when (which) {
-                                    0 -> takeScreenshot()
-                                    1 -> startSlowMotionRecording()
-                                    2 -> {
-                                        isGamePaused = false
-                                        performGlobalAction(GLOBAL_ACTION_BACK)
-                                    }
-                                }
-                                isShowingDialog = false
-                            }
-                            .setOnCancelListener {
-                                isShowingDialog = false
-                                isGamePaused = false
-                                performGlobalAction(GLOBAL_ACTION_BACK)
-                            }
-                            .setOnDismissListener {
-                                isShowingDialog = false
-                                if (!isGamePaused) {
-                                    performGlobalAction(GLOBAL_ACTION_BACK)
+                if (!isShowingDialog) {  // 防止重复显示对话框
+                    isShowingDialog = true
+                    val options = arrayOf("截图", "录制慢动作", "取消")
+                    val dialog = AlertDialog.Builder(this)
+                        .setTitle("选择操作")
+                        .setItems(options) { _, which ->
+                            when (which) {
+                                0 -> takeScreenshot()
+                                1 -> startSlowMotionRecording()
+                                2 -> {
+                                    // 什么都不做，直接关闭对话框
                                 }
                             }
-                            .create()
-                        dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-                        dialog.show()
-                    }, 100)
-                } else {
-                    performGlobalAction(GLOBAL_ACTION_BACK)
+                            isShowingDialog = false
+                        }
+                        .setOnCancelListener {
+                            isShowingDialog = false
+                        }
+                        .setOnDismissListener {
+                            isShowingDialog = false
+                        }
+                        .create()
+                    dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+                    dialog.show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 isShowingDialog = false
-                isGamePaused = false
             }
         }
         return super.onStartCommand(intent, flags, startId)

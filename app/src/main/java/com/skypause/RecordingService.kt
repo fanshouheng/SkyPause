@@ -39,14 +39,19 @@ class RecordingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "START_RECORDING" -> {
-                initMediaProjection()
-                startRecording()
+                try {
+                    initMediaProjection()
+                    startRecording()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    showNotification("录制失败", "请重试")
+                }
             }
             "STOP_RECORDING" -> {
-                stopRecording()
-                // 处理视频变速
-                outputFile?.let { file ->
-                    slowDownVideo(file)
+                try {
+                    stopRecording()
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -105,4 +110,13 @@ class RecordingService : Service() {
     }
 
     override fun onBind(intent: Intent): IBinder? = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            stopRecording()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 } 

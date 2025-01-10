@@ -29,7 +29,6 @@ class ScreenCaptureActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_MEDIA_PROJECTION) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                // 保存录屏权限
                 RecordingService.setMediaProjectionData(resultCode, data)
                 
                 // 开始录制
@@ -37,18 +36,15 @@ class ScreenCaptureActivity : Activity() {
                 intent.action = "START_RECORDING"
                 startService(intent)
                 
-                // 3秒后停止录制并显示通知
+                // 3秒后停止录制
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     val stopIntent = Intent(this, RecordingService::class.java)
                     stopIntent.action = "STOP_RECORDING"
                     startService(stopIntent)
-                    
-                    // 显示通知
-                    showNotification("录制完成", "视频已保存，可以在相册中查看并以慢动作播放")
                 }, 3000)
             }
         }
-        finish()
+        finish()  // 确保Activity关闭
     }
 
     private fun showNotification(title: String, message: String) {
