@@ -8,6 +8,7 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 
 class ScreenCaptureActivity : Activity() {
@@ -17,33 +18,38 @@ class ScreenCaptureActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 立即请求录屏权限
         requestScreenCapture()
     }
 
     private fun requestScreenCapture() {
-        val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        startActivityForResult(mediaProjectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
+        try {
+            val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            startActivityForResult(mediaProjectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            finish()
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_MEDIA_PROJECTION) {
-            if (resultCode == Activity.RESULT_OK && data != null) {
+            if (resultCode == RESULT_OK && data != null) {
+                // 保存录屏权限数据
                 RecordingService.setMediaProjectionData(resultCode, data)
                 
-                // 开始录制
-                val intent = Intent(this, RecordingService::class.java)
-                intent.action = "START_RECORDING"
-                startService(intent)
-                
-                // 3秒后停止录制
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    val stopIntent = Intent(this, RecordingService::class.java)
-                    stopIntent.action = "STOP_RECORDING"
-                    startService(stopIntent)
-                    
-                    // 显示录制完成通知
-                    showNotification("录制完成", "视频已保存到相册")
-                }, 3000)
+                // 启动录制服务
+                val intent = Intent(this, RecordingService::class.java).apply {
+                    action = "START_RECORDING"
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+            } else {
+                Toast.makeText(this, "录屏权限获取失败", Toast.LENGTH_SHORT).show()
             }
         }
         finish()

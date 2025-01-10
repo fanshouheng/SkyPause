@@ -10,6 +10,7 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.app.AlertDialog
 import android.view.WindowManager
+import android.widget.Toast
 
 class PauseAccessibilityService : AccessibilityService() {
     private var isShowingDialog = false
@@ -59,9 +60,14 @@ class PauseAccessibilityService : AccessibilityService() {
     }
 
     private fun startSlowMotionRecording() {
-        val intent = Intent(this, ScreenCaptureActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(intent)
+        try {
+            val intent = Intent(this, ScreenCaptureActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "启动录制失败", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onDestroy() {
