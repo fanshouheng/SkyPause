@@ -40,10 +40,13 @@ class ScreenCaptureActivity : Activity() {
                     val stopIntent = Intent(this, RecordingService::class.java)
                     stopIntent.action = "STOP_RECORDING"
                     startService(stopIntent)
+                    
+                    // 显示录制完成通知
+                    showNotification("录制完成", "视频已保存到相册")
                 }, 3000)
             }
         }
-        finish()  // 确保Activity关闭
+        finish()
     }
 
     private fun showNotification(title: String, message: String) {

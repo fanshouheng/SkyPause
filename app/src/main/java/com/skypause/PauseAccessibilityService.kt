@@ -12,8 +12,6 @@ import android.app.AlertDialog
 import android.view.WindowManager
 
 class PauseAccessibilityService : AccessibilityService() {
-    private var isGamePaused = false
-    private var gamePackageName = "com.tgc.sky.android"
     private var isShowingDialog = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -33,25 +31,19 @@ class PauseAccessibilityService : AccessibilityService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "PERFORM_GLOBAL_ACTION") {
             try {
-                if (!isShowingDialog) {  // 防止重复显示对话框
+                if (!isShowingDialog) {
                     isShowingDialog = true
-                    val options = arrayOf("截图", "录制慢动作", "取消")
                     val dialog = AlertDialog.Builder(this)
-                        .setTitle("选择操作")
-                        .setItems(options) { _, which ->
-                            when (which) {
-                                0 -> takeScreenshot()
-                                1 -> startSlowMotionRecording()
-                                2 -> {
-                                    // 什么都不做，直接关闭对话框
-                                }
-                            }
+                        .setTitle("开始录制")
+                        .setMessage("将录制3秒视频，确定开始吗？")
+                        .setPositiveButton("开始") { _, _ ->
+                            startSlowMotionRecording()
+                            isShowingDialog = false
+                        }
+                        .setNegativeButton("取消") { _, _ ->
                             isShowingDialog = false
                         }
                         .setOnCancelListener {
-                            isShowingDialog = false
-                        }
-                        .setOnDismissListener {
                             isShowingDialog = false
                         }
                         .create()
@@ -66,11 +58,6 @@ class PauseAccessibilityService : AccessibilityService() {
         return super.onStartCommand(intent, flags, startId)
     }
 
-    private fun takeScreenshot() {
-        // 使用 MediaProjection API 截图
-        // ... 截图代码
-    }
-
     private fun startSlowMotionRecording() {
         val intent = Intent(this, ScreenCaptureActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -80,6 +67,5 @@ class PauseAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         isShowingDialog = false
-        isGamePaused = false
     }
 } 
