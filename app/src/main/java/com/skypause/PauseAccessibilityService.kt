@@ -14,12 +14,12 @@ import android.view.WindowManager
 class PauseAccessibilityService : AccessibilityService() {
     private var isGamePaused = false
     private var gamePackageName = "com.tgc.sky.android"
+    private var isShowingDialog = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val currentPackage = event.packageName?.toString()
-            if (currentPackage != gamePackageName && isGamePaused) {
-                // 如果在暂停状态，保持在最近任务视图
+            if (currentPackage != gamePackageName && isGamePaused && !isShowingDialog) {
                 performGlobalAction(GLOBAL_ACTION_RECENTS)
             }
         }
@@ -43,6 +43,7 @@ class PauseAccessibilityService : AccessibilityService() {
                     performGlobalAction(GLOBAL_ACTION_RECENTS)
                     
                     Handler(Looper.getMainLooper()).postDelayed({
+                        isShowingDialog = true
                         val options = arrayOf("截图", "录制慢动作", "取消")
                         val dialog = AlertDialog.Builder(this)
                             .setTitle("选择操作")
@@ -55,6 +56,18 @@ class PauseAccessibilityService : AccessibilityService() {
                                         performGlobalAction(GLOBAL_ACTION_BACK)
                                     }
                                 }
+                                isShowingDialog = false
+                            }
+                            .setOnCancelListener {
+                                isShowingDialog = false
+                                isGamePaused = false
+                                performGlobalAction(GLOBAL_ACTION_BACK)
+                            }
+                            .setOnDismissListener {
+                                isShowingDialog = false
+                                if (!isGamePaused) {
+                                    performGlobalAction(GLOBAL_ACTION_BACK)
+                                }
                             }
                             .create()
                         dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
@@ -65,6 +78,8 @@ class PauseAccessibilityService : AccessibilityService() {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                isShowingDialog = false
+                isGamePaused = false
             }
         }
         return super.onStartCommand(intent, flags, startId)
@@ -79,5 +94,11 @@ class PauseAccessibilityService : AccessibilityService() {
         val intent = Intent(this, ScreenCaptureActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(intent)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isShowingDialog = false
+        isGamePaused = false
     }
 } 
