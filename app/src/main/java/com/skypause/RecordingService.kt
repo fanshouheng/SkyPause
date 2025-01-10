@@ -24,6 +24,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.view.Gravity
 import android.graphics.PixelFormat
+import android.util.Log
 
 class RecordingService : Service() {
     companion object {
@@ -47,12 +48,14 @@ class RecordingService : Service() {
     override fun onBind(intent: Intent): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("SkyPause", "RecordingService received command: ${intent?.action}")
         when (intent?.action) {
             "START_RECORDING" -> {
                 try {
+                    Log.d("SkyPause", "Starting recording")
                     startRecording()
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("SkyPause", "Failed to start recording", e)
                     showNotification("录制失败", "请重试")
                 }
             }

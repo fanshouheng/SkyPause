@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.app.AlertDialog
 import android.view.WindowManager
 import android.widget.Toast
+import android.util.Log
 
 class PauseAccessibilityService : AccessibilityService() {
     private var isShowingDialog = false
@@ -61,12 +62,13 @@ class PauseAccessibilityService : AccessibilityService() {
 
     private fun startSlowMotionRecording() {
         try {
+            Log.d("SkyPause", "Starting screen capture activity")
             val intent = Intent(this, ScreenCaptureActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
         } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, "启动录制失败", Toast.LENGTH_SHORT).show()
+            Log.e("SkyPause", "Failed to start recording", e)
+            Toast.makeText(this, "启动录制失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
