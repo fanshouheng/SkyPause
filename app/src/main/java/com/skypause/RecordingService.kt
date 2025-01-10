@@ -17,6 +17,11 @@ import androidx.core.app.NotificationCompat
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import android.view.LayoutInflater
+import android.view.View
+import android.view.WindowManager
+import android.widget.SeekBar
+import android.widget.TextView
 
 class RecordingService : Service() {
     companion object {
@@ -34,17 +39,17 @@ class RecordingService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var outputFile: File? = null
-    
-    private fun initMediaProjection() {
-        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjection = projectionManager.getMediaProjection(resultCode, resultData!!)
-    }
+    private var speedControlView: View? = null
+    private var currentSpeed = 1.0f
+    private var lastPresentationTimeUs: Long = 0
+    private var frameCallback: MediaProjection.Callback? = null
+
+    override fun onBind(intent: Intent): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "START_RECORDING" -> {
                 try {
-                    initMediaProjection()
                     startRecording()
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -54,6 +59,7 @@ class RecordingService : Service() {
             "STOP_RECORDING" -> {
                 try {
                     stopRecording()
+                    showNotification("录制完成", "视频已保存")
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -62,55 +68,154 @@ class RecordingService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startRecording() {
-        // 创建输出文件
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val filename = "SKY_$timestamp.mp4"
-        outputFile = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), filename)
+    private fun showSpeedControl() {
+        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        speedControlView = LayoutInflater.from(this).inflate(R.layout.speed_control, null)
 
-        mediaRecorder = MediaRecorder().apply {
-            setVideoSource(MediaRecorder.VideoSource.SURFACE)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-            setVideoEncodingBitRate(10000000) // 10Mbps
-            setVideoFrameRate(60) // 高帧率录制
-            setVideoSize(1080, 1920) // 根据屏幕分辨率调整
-            setOutputFile(outputFile?.absolutePath)
-            prepare()
-        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        )
+        
+        params.gravity = Gravity.TOP or Gravity.END
+        params.y = 100
 
-        // 创建虚拟显示
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "ScreenRecording",
-            1080, 1920, 1,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            mediaRecorder?.surface, null, null
+        speedControlView?.findViewById<SeekBar>(R.id.speedSeekBar)?.setOnSeekBarChangeListener(
+            object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    // 将进度转换为 0.05x 到 2.0x 的速度
+                    currentSpeed = if (progress < 5) {
+                        // 前5%的进度对应 0.05x 到 0.1x
+                        0.05f + (progress / 5f) * 0.05f
+                    } else {
+                        // 剩余95%的进度对应 0.1x 到 2.0x
+                        0.1f + ((progress - 5) / 95f) * 1.9f
+                    }
+                    
+                    speedControlView?.findViewById<TextView>(R.id.speedText)?.text = 
+                        String.format("%.2fx", currentSpeed)
+                    
+                    // 调整录制参数
+                    adjustRecordingSpeed(currentSpeed)
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            }
         )
 
-        mediaRecorder?.start()
+        windowManager.addView(speedControlView, params)
+    }
+
+    private fun adjustRecordingSpeed(speed: Float) {
+        currentSpeed = speed
+        // 更新时间戳调整器
+        frameCallback?.let { mediaProjection?.unregisterCallback(it) }
+        frameCallback = object : MediaProjection.Callback() {
+            override fun onFrameAvailable(timeUs: Long) {
+                if (lastPresentationTimeUs == 0L) {
+                    lastPresentationTimeUs = timeUs
+                }
+                
+                // 根据速度调整时间戳
+                val adjustedTimeUs = lastPresentationTimeUs + 
+                    ((timeUs - lastPresentationTimeUs) * currentSpeed).toLong()
+                lastPresentationTimeUs = adjustedTimeUs
+                
+                // 使用调整后的时间戳
+                mediaRecorder?.setInputSurface(adjustedTimeUs)
+            }
+        }
+        mediaProjection?.registerCallback(frameCallback!!, null)
+    }
+
+    private fun startRecording() {
+        try {
+            // 先启动前台服务
+            val notification = NotificationCompat.Builder(this, "recording_channel")
+                .setContentTitle("正在录制慢动作")
+                .setContentText("录制中...")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .build()
+            startForeground(NOTIFICATION_ID, notification)
+
+            // 然后开始录制
+            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = projectionManager.getMediaProjection(resultCode, resultData!!)
+
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val filename = "SKY_SLOW_$timestamp.mp4"
+            outputFile = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), filename)
+
+            mediaRecorder = MediaRecorder().apply {
+                setVideoSource(MediaRecorder.VideoSource.SURFACE)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+                setVideoEncodingBitRate(20000000)  // 高码率
+                setVideoFrameRate(60)  // 使用60fps
+                setVideoSize(720, 1280)
+                setOutputFile(outputFile?.absolutePath)
+                prepare()
+            }
+
+            // 初始化时间戳调整器
+            lastPresentationTimeUs = 0
+            adjustRecordingSpeed(currentSpeed)
+
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "ScreenRecording",
+                720, 1280, 1,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                mediaRecorder?.surface, null, null
+            )
+
+            showSpeedControl() // 显示调速控制
+            
+            mediaRecorder?.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showNotification("录制失败", "错误: ${e.message}")
+        }
     }
 
     private fun stopRecording() {
-        mediaRecorder?.apply {
-            stop()
-            release()
-        }
-        virtualDisplay?.release()
-        mediaProjection?.stop()
-    }
+        try {
+            frameCallback?.let { mediaProjection?.unregisterCallback(it) }
+            frameCallback = null
+            lastPresentationTimeUs = 0
+            
+            // 移除调速控制
+            speedControlView?.let {
+                val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+                windowManager.removeView(it)
+                speedControlView = null
+            }
+            
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
+            virtualDisplay?.release()
+            mediaProjection?.stop()
 
-    private fun slowDownVideo(inputFile: File) {
-        val outputFile = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), 
-            inputFile.nameWithoutExtension + "_slow.mp4")
-        
-        // 使用 MediaCodec 和 MediaMuxer 进行视频变速
-        // 将视频帧间隔扩大到原来的2倍或4倍
-        // 这里需要具体实现视频处理逻辑
-        
-        // 处理完成后通知用户
-        val intent = Intent("VIDEO_PROCESSED")
-        intent.putExtra("output_path", outputFile.absolutePath)
-        sendBroadcast(intent)
+            // 处理视频速度
+            outputFile?.let { file ->
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                val outputFilename = "SKY_SLOW_${timestamp}_${String.format("%.2fx", currentSpeed)}.mp4"
+                val processedFile = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), outputFilename)
+                
+                // TODO: 使用 MediaCodec 处理视频速度
+                // 这部分需要单独实现
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun showNotification(title: String, message: String) {
@@ -135,14 +240,8 @@ class RecordingService : Service() {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
-    override fun onBind(intent: Intent): IBinder? = null
-
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            stopRecording()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        stopRecording()
     }
 } 
